@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  Image,
   Pressable,
   Alert,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,10 +17,11 @@ import { useMediaLibrary } from '../hooks/useMediaLibrary';
 import { Button } from '../components/Button';
 import { LoadingSpinner, LoadingOverlay } from '../components/LoadingSpinner';
 import { UpgradePrompt } from '../components/UpgradePrompt';
+import { CategorySelectionModal } from '../components/CategorySelectionModal';
 import { colors, typography, spacing, borderRadius } from '../lib/constants';
 
 export default function ImportScreen() {
-  const { saveImage, fetchItems, fetchCategoryCounts } = useApp();
+  const { saveImageWithCategory, fetchItems, fetchCategoryCounts } = useApp();
   const { remaining, isAtLimit, checkCanSave } = useSubscription();
   const { permission, loading, screenshots, fetchScreenshots, requestPermission } = useMediaLibrary();
 
@@ -28,6 +29,12 @@ export default function ImportScreen() {
   const [processing, setProcessing] = useState(false);
   const [processedCount, setProcessedCount] = useState(0);
   const [showUpgrade, setShowUpgrade] = useState(false);
+
+  // Category selection modal state
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [currentScreenshotIndex, setCurrentScreenshotIndex] = useState(0);
+  const [screenshotsToProcess, setScreenshotsToProcess] = useState([]);
+  const [processingResults, setProcessingResults] = useState({ success: 0, failed: 0 });
 
   useEffect(() => {
     initializePermissions();
@@ -76,6 +83,7 @@ export default function ImportScreen() {
     setSelectedIds(new Set());
   }, []);
 
+  // Start the import process - shows category modal for each screenshot
   const handleImport = useCallback(async () => {
     if (selectedIds.size === 0) return;
 
@@ -84,53 +92,97 @@ export default function ImportScreen() {
       return;
     }
 
+    // Get selected screenshots in order
+    const selected = screenshots.filter(s => selectedIds.has(s.id));
+    setScreenshotsToProcess(selected);
+    setCurrentScreenshotIndex(0);
+    setProcessingResults({ success: 0, failed: 0 });
+    setShowCategoryModal(true);
+  }, [selectedIds, screenshots, isAtLimit]);
+
+  // Handle category selection for current screenshot
+  const handleCategorySelect = useCallback(async (category) => {
+    const currentScreenshot = screenshotsToProcess[currentScreenshotIndex];
+
+    setShowCategoryModal(false);
     setProcessing(true);
-    setProcessedCount(0);
+    setProcessedCount(currentScreenshotIndex);
 
-    const selectedScreenshots = screenshots.filter(s => selectedIds.has(s.id));
-    let successCount = 0;
-    let failCount = 0;
+    // Check if we can still save
+    const canSave = await checkCanSave();
+    if (!canSave.allowed) {
+      setProcessing(false);
+      Alert.alert(
+        'Limit Reached',
+        'You have reached your monthly save limit.',
+        [
+          { text: 'OK' },
+          { text: 'Upgrade', onPress: () => setShowUpgrade(true) },
+        ]
+      );
+      finishImport();
+      return;
+    }
 
-    for (const screenshot of selectedScreenshots) {
-      // Check if we can still save
-      const canSave = await checkCanSave();
-      if (!canSave.allowed) {
-        Alert.alert(
-          'Limit Reached',
-          'You have reached your monthly save limit.',
-          [
-            { text: 'OK' },
-            { text: 'Upgrade', onPress: () => setShowUpgrade(true) },
-          ]
-        );
-        break;
-      }
+    // Process with selected category
+    const result = await saveImageWithCategory(currentScreenshot.uri, category);
 
-      const result = await saveImage(screenshot.uri);
-      if (result.success) {
-        successCount++;
-      } else {
-        failCount++;
-      }
-      setProcessedCount(prev => prev + 1);
+    if (result.success) {
+      setProcessingResults(prev => ({ ...prev, success: prev.success + 1 }));
+    } else {
+      setProcessingResults(prev => ({ ...prev, failed: prev.failed + 1 }));
     }
 
     setProcessing(false);
 
+    // Move to next screenshot or finish
+    if (currentScreenshotIndex < screenshotsToProcess.length - 1) {
+      setCurrentScreenshotIndex(prev => prev + 1);
+      setShowCategoryModal(true);
+    } else {
+      finishImport();
+    }
+  }, [currentScreenshotIndex, screenshotsToProcess, checkCanSave, saveImageWithCategory]);
+
+  // Handle skip - move to next without saving
+  const handleSkip = useCallback(() => {
+    if (currentScreenshotIndex < screenshotsToProcess.length - 1) {
+      setCurrentScreenshotIndex(prev => prev + 1);
+    } else {
+      setShowCategoryModal(false);
+      finishImport();
+    }
+  }, [currentScreenshotIndex, screenshotsToProcess]);
+
+  // Handle cancel all - stop import process
+  const handleCancelAll = useCallback(() => {
+    setShowCategoryModal(false);
+    finishImport();
+  }, []);
+
+  // Finish import and show results
+  const finishImport = useCallback(async () => {
     // Refresh data
     await fetchItems({ refresh: true });
     await fetchCategoryCounts();
 
-    if (successCount > 0) {
+    const { success, failed } = processingResults;
+
+    if (success > 0 || failed > 0) {
       Alert.alert(
         'Import Complete',
-        `Successfully imported ${successCount} item${successCount !== 1 ? 's' : ''}${failCount > 0 ? `. ${failCount} failed.` : '.'}`,
+        `Successfully imported ${success} item${success !== 1 ? 's' : ''}${failed > 0 ? `. ${failed} failed.` : '.'}`,
         [{ text: 'Done', onPress: () => router.back() }]
       );
-    } else if (failCount > 0) {
-      Alert.alert('Import Failed', 'Failed to import the selected items. Please try again.');
+    } else {
+      router.back();
     }
-  }, [selectedIds, screenshots, isAtLimit, checkCanSave, saveImage, fetchItems, fetchCategoryCounts]);
+
+    // Reset state
+    setScreenshotsToProcess([]);
+    setCurrentScreenshotIndex(0);
+    setSelectedIds(new Set());
+  }, [processingResults, fetchItems, fetchCategoryCounts]);
 
   const renderItem = useCallback(({ item }) => {
     const isSelected = selectedIds.has(item.id);
@@ -140,7 +192,12 @@ export default function ImportScreen() {
         style={[styles.imageItem, isSelected && styles.imageItemSelected]}
         onPress={() => toggleSelection(item.id)}
       >
-        <Image source={{ uri: item.uri }} style={styles.thumbnail} />
+        <Image
+          source={{ uri: item.uri }}
+          style={styles.thumbnail}
+          contentFit="cover"
+          transition={200}
+        />
         {isSelected && (
           <View style={styles.selectedOverlay}>
             <View style={styles.checkmark}>
@@ -184,6 +241,9 @@ export default function ImportScreen() {
       </View>
     );
   };
+
+  // Get current screenshot for modal
+  const currentScreenshot = screenshotsToProcess[currentScreenshotIndex];
 
   return (
     <>
@@ -238,10 +298,24 @@ export default function ImportScreen() {
           </View>
         )}
 
+        {/* Processing overlay */}
         <LoadingOverlay
           visible={processing}
-          message={`Processing ${processedCount + 1} of ${selectedIds.size}...`}
+          message={`Processing ${processedCount + 1} of ${screenshotsToProcess.length}...`}
         />
+
+        {/* Category selection modal */}
+        {currentScreenshot && (
+          <CategorySelectionModal
+            visible={showCategoryModal}
+            imageUri={currentScreenshot.uri}
+            onSelect={handleCategorySelect}
+            onSkip={handleSkip}
+            onClose={handleCancelAll}
+            currentIndex={currentScreenshotIndex}
+            totalCount={screenshotsToProcess.length}
+          />
+        )}
 
         <UpgradePrompt
           visible={showUpgrade}

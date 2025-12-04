@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useCallback } from 'react';
-import { getSavedItems, getCategoryCounts, processAndSaveImage, deleteSavedItem, updateSavedItem } from '../lib/storage';
+import { getSavedItems, getCategoryCounts, processAndSaveImage, processWithCategory, deleteSavedItem, updateSavedItem } from '../lib/storage';
 import { useAuth } from './AuthContext';
 
 const AppContext = createContext(null);
@@ -138,6 +138,16 @@ export function AppProvider({ children }) {
     return result;
   }, [user]);
 
+  const saveImageWithCategory = useCallback(async (uri, category) => {
+    if (!user) return { success: false, error: 'Not authenticated' };
+
+    const result = await processWithCategory(uri, user.id, category);
+    if (result.success) {
+      dispatch({ type: 'ADD_ITEM', payload: result.data });
+    }
+    return result;
+  }, [user]);
+
   const removeItem = useCallback(async (itemId, storagePath) => {
     const result = await deleteSavedItem(itemId, storagePath);
     if (result.success) {
@@ -167,6 +177,7 @@ export function AppProvider({ children }) {
     fetchItems,
     fetchCategoryCounts,
     saveImage,
+    saveImageWithCategory,
     removeItem,
     editItem,
     setCategory,
