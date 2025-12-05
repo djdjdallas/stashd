@@ -37,11 +37,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { imageBase64, imageUrl } = await req.json();
+    const { imageBase64, imageUrl, creatorType } = await req.json();
     log("Request body received:", {
       hasImageBase64: !!imageBase64,
       imageBase64Length: imageBase64?.length || 0,
       hasImageUrl: !!imageUrl,
+      creatorType: creatorType || 'content_creator',
     });
 
     // Validate input
@@ -75,9 +76,54 @@ Deno.serve(async (req) => {
     log("Calling Anthropic API...");
     const startTime = Date.now();
 
+    // Build prompt based on creator type
+    const isSoftwareDeveloper = creatorType === 'software_developer';
+
+    const prompt = isSoftwareDeveloper
+      ? `Analyze this screenshot and categorize it for a software developer. Return ONLY valid JSON with no additional text:
+
+{
+  "category": "hook" | "thumbnail" | "video_idea" | "script" | "visual" | "analytics" | "other",
+  "source_platform": "github" | "twitter" | "hackernews" | "devto" | "reddit" | "other",
+  "extracted_text": "any readable text in the image (be concise, key text only)",
+  "confidence": 0.0-1.0
+}
+
+Categories explained (for software developers):
+- video_idea (Project Idea): App concepts, feature ideas, side project inspiration, startup ideas
+- hook (README Hook): Compelling README intros, documentation hooks, marketing copy for repos
+- thumbnail (UI Design): UI/UX screenshots, design patterns, component inspiration, app interfaces
+- script (Code Snippet): Code patterns, algorithms, implementation examples, syntax references
+- analytics (Metrics): Performance benchmarks, GitHub stats, download numbers, tech metrics
+- visual (Architecture): System diagrams, architecture drawings, flowcharts, technical diagrams
+- other: Doesn't fit the above categories
+
+Be concise with extracted_text - only include key phrases, not every word.
+Return ONLY the JSON object, nothing else.`
+      : `Analyze this screenshot and categorize it for a content creator. Return ONLY valid JSON with no additional text:
+
+{
+  "category": "hook" | "thumbnail" | "video_idea" | "script" | "visual" | "analytics" | "other",
+  "source_platform": "tiktok" | "youtube" | "instagram" | "twitter" | "other",
+  "extracted_text": "any readable text in the image (be concise, key text only)",
+  "confidence": 0.0-1.0
+}
+
+Categories explained (for content creators):
+- hook: Text overlays, captions, opening lines designed to grab attention
+- thumbnail: YouTube thumbnails or video cover images
+- video_idea: Topic suggestions, content concepts, trending topics
+- script: Longer text, outlines, talking points, scripts
+- visual: B-roll ideas, transitions, effects, aesthetic inspiration
+- analytics: Screenshots of metrics, views, engagement stats
+- other: Doesn't fit the above categories
+
+Be concise with extracted_text - only include key phrases, not every word.
+Return ONLY the JSON object, nothing else.`;
+
     const response = await anthropic.messages.create({
-      model: "claude-3-haiku-20240307",
-      max_tokens: 500,
+      model: "claude-opus-4-5-20251101",
+      max_tokens: 1024,
       messages: [
         {
           role: "user",
@@ -88,26 +134,7 @@ Deno.serve(async (req) => {
             },
             {
               type: "text",
-              text: `Analyze this screenshot and categorize it for a content creator. Return ONLY valid JSON with no additional text:
-
-{
-  "category": "hook" | "thumbnail" | "video_idea" | "script" | "visual" | "analytics" | "other",
-  "source_platform": "tiktok" | "youtube" | "instagram" | "twitter" | "other",
-  "extracted_text": "any readable text in the image (be concise, key text only)",
-  "confidence": 0.0-1.0
-}
-
-Categories explained:
-- hook: Text overlays, captions, opening lines designed to grab attention
-- thumbnail: YouTube thumbnails or video cover images
-- video_idea: Topic suggestions, content concepts, trending topics
-- script: Longer text, outlines, talking points, scripts
-- visual: B-roll ideas, transitions, effects, aesthetic inspiration
-- analytics: Screenshots of metrics, views, engagement stats
-- other: Doesn't fit the above categories
-
-Be concise with extracted_text - only include key phrases, not every word.
-Return ONLY the JSON object, nothing else.`,
+              text: prompt,
             },
           ],
         },
@@ -142,7 +169,7 @@ Return ONLY the JSON object, nothing else.`,
 
     // Validate and normalize the response
     const validCategories = ["hook", "thumbnail", "video_idea", "script", "visual", "analytics", "other"];
-    const validPlatforms = ["tiktok", "youtube", "instagram", "twitter", "other"];
+    const validPlatforms = ["tiktok", "youtube", "instagram", "twitter", "github", "hackernews", "devto", "reddit", "other"];
 
     const finalResult = {
       category: validCategories.includes(result.category) ? result.category : "other",

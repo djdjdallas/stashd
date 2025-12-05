@@ -1,3 +1,6 @@
+// Settings Screen
+// Updated with Stashd Design System v2.0
+
 import React, { useState, useCallback } from 'react';
 import {
   View,
@@ -10,24 +13,48 @@ import {
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+
 import { useAuth } from '../../context/AuthContext';
 import { useSubscription } from '../../hooks/useSubscription';
 import { useApp } from '../../context/AppContext';
 import { Button } from '../../components/Button';
 import { UpgradePrompt } from '../../components/UpgradePrompt';
-import { colors, typography, spacing, borderRadius, FREE_TIER_LIMIT } from '../../lib/constants';
+import { ProgressBar } from '../../components/ui/ProgressBar';
+import {
+  colors,
+  typography,
+  spacing,
+  borderRadius,
+  gradients,
+  componentTokens,
+  FREE_TIER_LIMIT,
+} from '../../lib/constants';
+
+const listItemTokens = componentTokens.listItem;
 
 function SettingsItem({ icon, title, subtitle, onPress, showArrow = true, danger = false }) {
+  const handlePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (onPress) onPress();
+  };
+
   return (
     <Pressable
       style={({ pressed }) => [
         styles.settingsItem,
         pressed && styles.pressed,
       ]}
-      onPress={onPress}
+      onPress={handlePress}
     >
-      <View style={[styles.iconContainer, danger && styles.dangerIcon]}>
-        <Ionicons name={icon} size={20} color={danger ? colors.error : colors.textPrimary} />
+      <View style={[styles.iconContainer, danger && styles.dangerIconContainer]}>
+        <Ionicons
+          name={icon}
+          size={20}
+          color={danger ? colors.error : colors.textPrimary}
+        />
       </View>
       <View style={styles.itemContent}>
         <Text style={[styles.itemTitle, danger && styles.dangerText]}>{title}</Text>
@@ -37,6 +64,12 @@ function SettingsItem({ icon, title, subtitle, onPress, showArrow = true, danger
         <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
       )}
     </Pressable>
+  );
+}
+
+function SectionHeader({ title }) {
+  return (
+    <Text style={styles.sectionTitle}>{title}</Text>
   );
 }
 
@@ -81,7 +114,6 @@ export default function SettingsScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            // TODO: Implement account deletion
             Alert.alert('Coming Soon', 'Account deletion will be available soon.');
           },
         },
@@ -91,36 +123,58 @@ export default function SettingsScreen() {
 
   const handleUpgrade = useCallback(() => {
     setShowUpgrade(false);
-    // TODO: Implement Stripe checkout
     Alert.alert('Coming Soon', 'Subscription management will be available soon.');
   }, []);
 
+  const getProgressVariant = () => {
+    if (usagePercentage >= 100) return 'danger';
+    if (usagePercentage >= 80) return 'warning';
+    return 'default';
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Account Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
+        <Animated.View
+          entering={FadeIn.duration(400)}
+          style={styles.section}
+        >
+          <SectionHeader title="Account" />
           <View style={styles.card}>
             <View style={styles.accountInfo}>
-              <View style={styles.avatar}>
+              <LinearGradient
+                colors={gradients.primary.colors}
+                start={gradients.primary.start}
+                end={gradients.primary.end}
+                style={styles.avatar}
+              >
                 <Text style={styles.avatarText}>
                   {user?.email?.[0]?.toUpperCase() || '?'}
                 </Text>
-              </View>
+              </LinearGradient>
               <View style={styles.accountDetails}>
-                <Text style={styles.email}>{user?.email}</Text>
-                <Text style={styles.plan}>
-                  {isPro ? 'Pro Plan' : 'Free Plan'}
-                </Text>
+                <Text style={styles.email} numberOfLines={1}>{user?.email}</Text>
+                <View style={styles.planBadge}>
+                  <Text style={styles.planText}>
+                    {isPro ? 'Pro Plan' : 'Free Plan'}
+                  </Text>
+                </View>
               </View>
             </View>
           </View>
-        </View>
+        </Animated.View>
 
         {/* Usage Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Usage</Text>
+        <Animated.View
+          entering={FadeInDown.delay(100).duration(400)}
+          style={styles.section}
+        >
+          <SectionHeader title="Usage" />
           <View style={styles.card}>
             <View style={styles.usageHeader}>
               <Text style={styles.usageTitle}>Monthly Saves</Text>
@@ -130,31 +184,32 @@ export default function SettingsScreen() {
             </View>
             {!isPro && (
               <>
-                <View style={styles.progressBar}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      { width: `${Math.min(usagePercentage, 100)}%` },
-                      usagePercentage >= 80 && styles.progressWarning,
-                      usagePercentage >= 100 && styles.progressDanger,
-                    ]}
+                <View style={styles.progressContainer}>
+                  <ProgressBar
+                    progress={Math.min(usagePercentage, 100)}
+                    variant={getProgressVariant()}
+                    size="default"
+                    showGradient={usagePercentage < 80}
                   />
                 </View>
                 <Pressable
                   style={styles.upgradeButton}
                   onPress={() => setShowUpgrade(true)}
                 >
-                  <Ionicons name="rocket" size={16} color={colors.amber500} />
+                  <Ionicons name="rocket" size={16} color={colors.accent} />
                   <Text style={styles.upgradeText}>Upgrade to Pro</Text>
                 </Pressable>
               </>
             )}
           </View>
-        </View>
+        </Animated.View>
 
-        {/* Settings Items */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Preferences</Text>
+        {/* Preferences Section */}
+        <Animated.View
+          entering={FadeInDown.delay(200).duration(400)}
+          style={styles.section}
+        >
+          <SectionHeader title="Preferences" />
           <View style={styles.card}>
             <SettingsItem
               icon="notifications-outline"
@@ -179,10 +234,13 @@ export default function SettingsScreen() {
               onPress={() => {}}
             />
           </View>
-        </View>
+        </Animated.View>
 
         {/* Danger Zone */}
-        <View style={styles.section}>
+        <Animated.View
+          entering={FadeInDown.delay(300).duration(400)}
+          style={styles.section}
+        >
           <View style={styles.card}>
             <SettingsItem
               icon="log-out-outline"
@@ -198,10 +256,17 @@ export default function SettingsScreen() {
               danger
             />
           </View>
-        </View>
+        </Animated.View>
 
         {/* Version */}
-        <Text style={styles.version}>Silo v1.0.0</Text>
+        <Animated.View
+          entering={FadeIn.delay(400).duration(400)}
+        >
+          <Text style={styles.version}>Stashd v1.0.0</Text>
+        </Animated.View>
+
+        {/* Bottom padding for tab bar */}
+        <View style={styles.bottomPadding} />
       </ScrollView>
 
       <UpgradePrompt
@@ -222,17 +287,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: spacing.md,
-    paddingBottom: spacing.xxl,
+    padding: spacing.base,
   },
   section: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   sectionTitle: {
-    ...typography.caption,
+    ...typography.captionSmall,
     color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
     marginBottom: spacing.sm,
     marginLeft: spacing.xs,
   },
@@ -240,26 +302,25 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgSecondary,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
     overflow: 'hidden',
   },
   accountInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,
+    padding: spacing.base,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.amber500,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
   },
   avatarText: {
-    ...typography.h3,
-    color: colors.bgPrimary,
+    ...typography.h2,
+    color: colors.textInverse,
     fontWeight: '700',
   },
   accountDetails: {
@@ -268,18 +329,26 @@ const styles = StyleSheet.create({
   email: {
     ...typography.body,
     color: colors.textPrimary,
+    marginBottom: spacing.xxs,
   },
-  plan: {
-    ...typography.bodySmall,
-    color: colors.amber500,
-    marginTop: 2,
+  planBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: `${colors.accent}20`,
+    paddingVertical: spacing.xxs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.sm,
+  },
+  planText: {
+    ...typography.caption,
+    color: colors.accent,
+    fontWeight: '600',
   },
   usageHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.md,
-    paddingBottom: spacing.sm,
+    padding: spacing.base,
+    paddingBottom: spacing.md,
   },
   usageTitle: {
     ...typography.body,
@@ -290,60 +359,46 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: '600',
   },
-  progressBar: {
-    height: 6,
-    backgroundColor: colors.bgTertiary,
-    marginHorizontal: spacing.md,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.amber500,
-    borderRadius: 3,
-  },
-  progressWarning: {
-    backgroundColor: colors.warning,
-  },
-  progressDanger: {
-    backgroundColor: colors.error,
+  progressContainer: {
+    paddingHorizontal: spacing.base,
   },
   upgradeButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.md,
-    marginTop: spacing.sm,
+    padding: spacing.base,
+    marginTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.borderSubtle,
   },
   upgradeText: {
     ...typography.bodySmall,
-    color: colors.amber500,
+    color: colors.accent,
     fontWeight: '600',
     marginLeft: spacing.xs,
   },
   settingsItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,
+    padding: listItemTokens.paddingVertical,
+    paddingHorizontal: listItemTokens.paddingHorizontal,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: listItemTokens.separatorColor,
   },
   pressed: {
-    backgroundColor: colors.bgTertiary,
+    backgroundColor: listItemTokens.pressedBackground,
   },
   iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.sm,
+    width: listItemTokens.iconContainerSize,
+    height: listItemTokens.iconContainerSize,
+    borderRadius: listItemTokens.iconContainerRadius,
     backgroundColor: colors.bgTertiary,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
   },
-  dangerIcon: {
-    backgroundColor: colors.error + '20',
+  dangerIconContainer: {
+    backgroundColor: `${colors.error}20`,
   },
   itemContent: {
     flex: 1,
@@ -358,12 +413,15 @@ const styles = StyleSheet.create({
   itemSubtitle: {
     ...typography.caption,
     color: colors.textSecondary,
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
   version: {
     ...typography.caption,
     color: colors.textTertiary,
     textAlign: 'center',
     marginTop: spacing.lg,
+  },
+  bottomPadding: {
+    height: 100,
   },
 });

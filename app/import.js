@@ -34,7 +34,7 @@ export default function ImportScreen() {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [currentScreenshotIndex, setCurrentScreenshotIndex] = useState(0);
   const [screenshotsToProcess, setScreenshotsToProcess] = useState([]);
-  const [processingResults, setProcessingResults] = useState({ success: 0, failed: 0 });
+  const [processingResults, setProcessingResults] = useState({ success: 0, failed: 0, savedItems: [] });
 
   useEffect(() => {
     initializePermissions();
@@ -96,7 +96,7 @@ export default function ImportScreen() {
     const selected = screenshots.filter(s => selectedIds.has(s.id));
     setScreenshotsToProcess(selected);
     setCurrentScreenshotIndex(0);
-    setProcessingResults({ success: 0, failed: 0 });
+    setProcessingResults({ success: 0, failed: 0, savedItems: [] });
     setShowCategoryModal(true);
   }, [selectedIds, screenshots, isAtLimit]);
 
@@ -127,8 +127,12 @@ export default function ImportScreen() {
     // Process with selected category
     const result = await saveImageWithCategory(currentScreenshot.uri, category);
 
-    if (result.success) {
-      setProcessingResults(prev => ({ ...prev, success: prev.success + 1 }));
+    if (result.success && result.data) {
+      setProcessingResults(prev => ({
+        ...prev,
+        success: prev.success + 1,
+        savedItems: [...prev.savedItems, result.data],
+      }));
     } else {
       setProcessingResults(prev => ({ ...prev, failed: prev.failed + 1 }));
     }
@@ -166,8 +170,20 @@ export default function ImportScreen() {
     await fetchItems({ refresh: true });
     await fetchCategoryCounts();
 
-    const { success, failed } = processingResults;
+    const { success, failed, savedItems } = processingResults;
 
+    // Reset state first
+    setScreenshotsToProcess([]);
+    setCurrentScreenshotIndex(0);
+    setSelectedIds(new Set());
+
+    // If only one item was successfully saved, navigate directly to its detail screen
+    if (success === 1 && savedItems.length === 1 && savedItems[0]?.id) {
+      router.replace(`/item/${savedItems[0].id}`);
+      return;
+    }
+
+    // For multiple items or failures, show summary alert
     if (success > 0 || failed > 0) {
       Alert.alert(
         'Import Complete',
@@ -177,11 +193,6 @@ export default function ImportScreen() {
     } else {
       router.back();
     }
-
-    // Reset state
-    setScreenshotsToProcess([]);
-    setCurrentScreenshotIndex(0);
-    setSelectedIds(new Set());
   }, [processingResults, fetchItems, fetchCategoryCounts]);
 
   const renderItem = useCallback(({ item }) => {
@@ -341,7 +352,7 @@ const styles = StyleSheet.create({
   },
   clearText: {
     ...typography.body,
-    color: colors.amber500,
+    color: colors.accent,
   },
   selectionBar: {
     flexDirection: 'row',
@@ -357,7 +368,7 @@ const styles = StyleSheet.create({
   },
   selectAllText: {
     ...typography.bodySmall,
-    color: colors.amber500,
+    color: colors.accent,
     fontWeight: '600',
   },
   grid: {
@@ -374,7 +385,7 @@ const styles = StyleSheet.create({
   },
   imageItemSelected: {
     borderWidth: 3,
-    borderColor: colors.amber500,
+    borderColor: colors.accent,
   },
   thumbnail: {
     width: '100%',
@@ -382,7 +393,7 @@ const styles = StyleSheet.create({
   },
   selectedOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(251, 191, 36, 0.3)',
+    backgroundColor: `${colors.accent}40`,
     alignItems: 'flex-end',
     justifyContent: 'flex-start',
     padding: spacing.xs,
@@ -391,7 +402,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: colors.amber500,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },

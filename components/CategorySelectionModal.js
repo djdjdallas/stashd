@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,52 +10,11 @@ import {
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { colors, typography, spacing, borderRadius } from '../lib/constants';
+import { usePreferences, CREATOR_TYPES } from '../context/PreferencesContext';
+import { colors, typography, spacing, borderRadius, getCategoriesForType } from '../lib/constants';
 
-const CATEGORIES = [
-  {
-    id: 'video_idea',
-    label: 'Video Idea',
-    icon: 'bulb-outline',
-    description: 'Generate full video concept',
-    color: '#22c55e',
-  },
-  {
-    id: 'hook',
-    label: 'Hook',
-    icon: 'flash-outline',
-    description: 'Extract attention-grabbing hooks',
-    color: '#f59e0b',
-  },
-  {
-    id: 'thumbnail',
-    label: 'Thumbnail',
-    icon: 'image-outline',
-    description: 'Analyze thumbnail design',
-    color: '#3b82f6',
-  },
-  {
-    id: 'script',
-    label: 'Script',
-    icon: 'document-text-outline',
-    description: 'Extract script or talking points',
-    color: '#a855f7',
-  },
-  {
-    id: 'analytics',
-    label: 'Analytics',
-    icon: 'stats-chart-outline',
-    description: 'Extract metrics and insights',
-    color: '#06b6d4',
-  },
-  {
-    id: 'visual',
-    label: 'Visual',
-    icon: 'color-palette-outline',
-    description: 'Save as visual inspiration',
-    color: '#ec4899',
-  },
-];
+// Category display order
+const CATEGORY_ORDER = ['video_idea', 'hook', 'thumbnail', 'script', 'analytics', 'visual'];
 
 export function CategorySelectionModal({
   visible,
@@ -66,6 +25,14 @@ export function CategorySelectionModal({
   currentIndex,
   totalCount,
 }) {
+  const { creatorType } = usePreferences();
+
+  // Get categories based on creator type (defaults to content_creator)
+  const categories = useMemo(() => {
+    const categoryConfig = getCategoriesForType(creatorType || CREATOR_TYPES.CONTENT_CREATOR);
+    return CATEGORY_ORDER.map(id => categoryConfig[id]).filter(Boolean);
+  }, [creatorType]);
+
   return (
     <Modal
       visible={visible}
@@ -99,7 +66,7 @@ export function CategorySelectionModal({
             contentContainerStyle={styles.optionsContent}
             showsVerticalScrollIndicator={false}
           >
-            {CATEGORIES.map((category) => (
+            {categories.map((category) => (
               <Pressable
                 key={category.id}
                 style={({ pressed }) => [

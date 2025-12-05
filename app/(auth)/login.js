@@ -1,3 +1,6 @@
+// Login Screen
+// Updated with Stashd Design System v2.0
+
 import React, { useState } from 'react';
 import {
   View,
@@ -10,13 +13,25 @@ import {
 } from 'react-native';
 import { Link, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
+
 import { useAuth } from '../../context/AuthContext';
+import { useShareIntentContext } from 'expo-share-intent';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
-import { colors, typography, spacing } from '../../lib/constants';
+import {
+  colors,
+  typography,
+  spacing,
+  borderRadius,
+  gradients,
+} from '../../lib/constants';
 
 export default function LoginScreen() {
   const { signIn, loading, error } = useAuth();
+  const { hasShareIntent, shareIntent } = useShareIntentContext();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [localError, setLocalError] = useState('');
@@ -39,7 +54,12 @@ export default function LoginScreen() {
     if (signInError) {
       setLocalError(signInError.message || 'Login failed');
     } else {
-      router.replace('/(tabs)');
+      // Check if there's a pending share intent to process
+      if (hasShareIntent && shareIntent?.files?.length > 0) {
+        router.replace('/share-process');
+      } else {
+        router.replace('/(tabs)');
+      }
     }
   };
 
@@ -52,21 +72,44 @@ export default function LoginScreen() {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <View style={styles.header}>
-            <Text style={styles.logo}>Silo</Text>
+          {/* Header with Logo */}
+          <Animated.View
+            entering={FadeIn.duration(600)}
+            style={styles.header}
+          >
+            <View style={styles.logoContainer}>
+              <LinearGradient
+                colors={gradients.primary.colors}
+                start={gradients.primary.start}
+                end={gradients.primary.end}
+                style={styles.logoGradient}
+              >
+                <Ionicons name="layers" size={32} color={colors.textInverse} />
+              </LinearGradient>
+            </View>
+            <Text style={styles.logo}>Stashd</Text>
             <Text style={styles.tagline}>
               Stop scrolling past money.{'\n'}Save your best content ideas instantly.
             </Text>
-          </View>
+          </Animated.View>
 
-          <View style={styles.form}>
+          {/* Form Card */}
+          <Animated.View
+            entering={FadeInUp.delay(200).duration(500)}
+            style={styles.form}
+          >
             <Text style={styles.title}>Welcome back</Text>
 
             {(localError || error) && (
-              <View style={styles.errorContainer}>
+              <Animated.View
+                entering={FadeIn.duration(300)}
+                style={styles.errorContainer}
+              >
+                <Ionicons name="alert-circle" size={18} color={colors.error} />
                 <Text style={styles.errorText}>{localError || error}</Text>
-              </View>
+              </Animated.View>
             )}
 
             <Input
@@ -76,6 +119,9 @@ export default function LoginScreen() {
               placeholder="your@email.com"
               keyboardType="email-address"
               autoComplete="email"
+              leftIcon={
+                <Ionicons name="mail-outline" size={20} color={colors.textTertiary} />
+              }
             />
 
             <Input
@@ -85,12 +131,16 @@ export default function LoginScreen() {
               placeholder="Enter your password"
               secureTextEntry
               autoComplete="password"
+              leftIcon={
+                <Ionicons name="lock-closed-outline" size={20} color={colors.textTertiary} />
+              }
             />
 
             <Button
               title="Sign In"
               onPress={handleLogin}
               loading={loading}
+              variant="primary"
               style={styles.button}
             />
 
@@ -102,7 +152,7 @@ export default function LoginScreen() {
                 </Pressable>
               </Link>
             </View>
-          </View>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -120,16 +170,26 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: spacing.lg,
+    padding: spacing.xl,
   },
   header: {
     alignItems: 'center',
     marginBottom: spacing.xxl,
   },
+  logoContainer: {
+    marginBottom: spacing.md,
+  },
+  logoGradient: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   logo: {
-    ...typography.h1,
-    fontSize: 48,
-    color: colors.amber500,
+    ...typography.display,
+    fontSize: 42,
+    color: colors.textPrimary,
     fontWeight: '700',
   },
   tagline: {
@@ -137,32 +197,36 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     marginTop: spacing.sm,
+    lineHeight: 24,
   },
   form: {
     backgroundColor: colors.bgSecondary,
-    borderRadius: 24,
-    padding: spacing.lg,
+    borderRadius: borderRadius.xxl,
+    padding: spacing.xl,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
   },
   title: {
     ...typography.h2,
     color: colors.textPrimary,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
     textAlign: 'center',
   },
   errorContainer: {
-    backgroundColor: colors.error + '20',
-    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${colors.error}15`,
+    borderRadius: borderRadius.md,
     padding: spacing.md,
-    marginBottom: spacing.md,
+    marginBottom: spacing.base,
     borderWidth: 1,
-    borderColor: colors.error + '40',
+    borderColor: `${colors.error}30`,
+    gap: spacing.sm,
   },
   errorText: {
     ...typography.bodySmall,
     color: colors.error,
-    textAlign: 'center',
+    flex: 1,
   },
   button: {
     marginTop: spacing.sm,
@@ -170,7 +234,7 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: spacing.lg,
+    marginTop: spacing.xl,
   },
   footerText: {
     ...typography.body,
@@ -178,7 +242,7 @@ const styles = StyleSheet.create({
   },
   link: {
     ...typography.body,
-    color: colors.amber500,
+    color: colors.accent,
     fontWeight: '600',
   },
 });

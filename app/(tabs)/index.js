@@ -1,3 +1,6 @@
+// Home Screen
+// Updated with Stashd Design System v2.0
+
 import React, { useEffect, useCallback } from 'react';
 import {
   View,
@@ -10,6 +13,8 @@ import {
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { useSubscription } from '../../hooks/useSubscription';
@@ -18,7 +23,15 @@ import { SavedItemCardSmall } from '../../components/SavedItemCard';
 import { ImportButton } from '../../components/ImportButton';
 import { UpgradeBanner, UsageBadge } from '../../components/UpgradePrompt';
 import { LoadingSpinner, EmptyState } from '../../components/LoadingSpinner';
-import { colors, typography, spacing, categories } from '../../lib/constants';
+import { Card } from '../../components/ui/Card';
+import { Badge, CategoryBadge } from '../../components/ui/Badge';
+import {
+  colors,
+  typography,
+  spacing,
+  borderRadius,
+  categories,
+} from '../../lib/constants';
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -54,14 +67,12 @@ export default function HomeScreen() {
 
   const handleImportPress = useCallback(() => {
     if (isAtLimit) {
-      // Show upgrade prompt
       return;
     }
     router.push('/import');
   }, [isAtLimit]);
 
   const handleUpgradePress = useCallback(() => {
-    // Navigate to settings or show upgrade modal
     router.push('/settings');
   }, []);
 
@@ -91,63 +102,97 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={colors.amber500}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
           />
         }
+        showsVerticalScrollIndicator={false}
       >
         {/* Header with usage */}
-        <View style={styles.header}>
+        <Animated.View
+          entering={FadeIn.duration(400)}
+          style={styles.header}
+        >
           <View>
             <Text style={styles.greeting}>Your Swipe File</Text>
             <Text style={styles.subheading}>{totalCount} saves total</Text>
           </View>
           <UsageBadge savesThisMonth={savesThisMonth} isPro={isPro} />
-        </View>
+        </Animated.View>
 
         {/* Upgrade banner if needed */}
         <UpgradeBanner onPress={handleUpgradePress} remaining={remaining} />
 
         {/* Recent Saves */}
         {recentItems.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Recent Saves</Text>
+          <Animated.View
+            entering={FadeInDown.delay(100).duration(400)}
+            style={styles.section}
+          >
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Recent Saves</Text>
+              <Text style={styles.seeAll}>See all</Text>
+            </View>
             <FlatList
               horizontal
               data={recentItems}
               keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <SavedItemCardSmall
-                  item={item}
-                  onPress={() => handleItemPress(item)}
-                />
+              renderItem={({ item, index }) => (
+                <Animated.View
+                  entering={FadeInDown.delay(150 + index * 50).duration(400)}
+                >
+                  <SavedItemCardSmall
+                    item={item}
+                    onPress={() => handleItemPress(item)}
+                  />
+                </Animated.View>
               )}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.recentList}
             />
-          </View>
+          </Animated.View>
         )}
 
         {/* Categories */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Categories</Text>
-          {categoryList.map((category) => (
-            <CategoryCard
-              key={category.key}
-              category={category.key}
-              count={category.count}
-              onPress={() => handleCategoryPress(category.key)}
-            />
-          ))}
-        </View>
+        <Animated.View
+          entering={FadeInDown.delay(200).duration(400)}
+          style={styles.section}
+        >
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Categories</Text>
+          </View>
+          <View style={styles.categoriesGrid}>
+            {categoryList.map((category, index) => (
+              <Animated.View
+                key={category.key}
+                entering={FadeInDown.delay(250 + index * 50).duration(400)}
+                style={styles.categoryWrapper}
+              >
+                <CategoryCard
+                  category={category.key}
+                  count={category.count}
+                  onPress={() => handleCategoryPress(category.key)}
+                />
+              </Animated.View>
+            ))}
+          </View>
+        </Animated.View>
 
         {/* Empty state */}
         {totalCount === 0 && !loading && (
-          <EmptyState
-            icon={<Ionicons name="images-outline" size={64} color={colors.textTertiary} />}
-            title="No saves yet"
-            message="Import your first screenshot to get started"
-          />
+          <Animated.View
+            entering={FadeIn.delay(300).duration(500)}
+          >
+            <EmptyState
+              icon={<Ionicons name="images-outline" size={64} color={colors.textTertiary} />}
+              title="No saves yet"
+              message="Import your first screenshot to get started"
+            />
+          </Animated.View>
         )}
+
+        {/* Bottom padding for FAB */}
+        <View style={styles.bottomPadding} />
       </ScrollView>
 
       <ImportButton onPress={handleImportPress} />
@@ -170,14 +215,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: spacing.md,
-    paddingBottom: 100,
+    padding: spacing.base,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   greeting: {
     ...typography.h2,
@@ -186,17 +230,37 @@ const styles = StyleSheet.create({
   subheading: {
     ...typography.bodySmall,
     color: colors.textSecondary,
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
   section: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
   },
   sectionTitle: {
     ...typography.h3,
     color: colors.textPrimary,
-    marginBottom: spacing.md,
+  },
+  seeAll: {
+    ...typography.bodySmall,
+    color: colors.accent,
+    fontWeight: '600',
   },
   recentList: {
-    paddingRight: spacing.md,
+    paddingRight: spacing.base,
+    gap: spacing.md,
+  },
+  categoriesGrid: {
+    gap: spacing.md,
+  },
+  categoryWrapper: {
+    marginBottom: spacing.xs,
+  },
+  bottomPadding: {
+    height: 120,
   },
 });

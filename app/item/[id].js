@@ -1,29 +1,46 @@
+// Item Detail Screen
+// Updated with Stashd Design System v2.0
+
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Image,
   Pressable,
   Alert,
   Dimensions,
   Share,
+  StatusBar,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
-import { colors, typography, spacing, borderRadius, categories } from '../../lib/constants';
+import { Badge } from '../../components/ui/Badge';
+import {
+  colors,
+  typography,
+  spacing,
+  borderRadius,
+  categories,
+  shadows,
+} from '../../lib/constants';
 
 const { width } = Dimensions.get('window');
 
 export default function ItemDetailScreen() {
   const { id } = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
   const { editItem, removeItem } = useApp();
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -56,6 +73,11 @@ export default function ItemDetailScreen() {
     }
   };
 
+  const handleBack = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.back();
+  }, []);
+
   const handleSave = useCallback(async () => {
     setSaving(true);
     const result = await editItem(id, {
@@ -66,6 +88,7 @@ export default function ItemDetailScreen() {
 
     if (result.success) {
       setItem(result.data);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Saved', 'Changes saved successfully');
     } else {
       Alert.alert('Error', 'Failed to save changes');
@@ -96,14 +119,92 @@ export default function ItemDetailScreen() {
 
   const handleShare = useCallback(async () => {
     if (!item) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
       await Share.share({
         url: item.image_url,
-        message: item.extracted_text || 'Check out this screenshot from Silo',
+        message: item.extracted_text || 'Check out this screenshot from Stash\'d',
       });
     } catch (error) {
       console.error('Share error:', error);
+    }
+  }, [item]);
+
+  // Share generated content as formatted text
+  const handleShareContent = useCallback(async () => {
+    if (!item) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Build formatted content
+    let content = '';
+    const categoryLabel = categories[item.category]?.label || item.category;
+
+    // Add title
+    if (item.generated_title) {
+      content += `📌 ${item.generated_title}\n\n`;
+    }
+
+    // Add category header
+    content += `Category: ${categoryLabel}\n`;
+    if (item.source_platform && item.source_platform !== 'other') {
+      content += `Source: ${item.source_platform.charAt(0).toUpperCase() + item.source_platform.slice(1)}\n`;
+    }
+    content += '\n';
+
+    // Add hook
+    if (item.generated_hook) {
+      const hookLabel = item.category === 'hook' ? 'Hook' :
+                       item.category === 'thumbnail' ? 'Thumbnail Text' :
+                       item.category === 'visual' ? 'Mood/Feeling' :
+                       item.category === 'analytics' ? 'Key Insight' : 'Hook';
+      content += `⚡ ${hookLabel}:\n"${item.generated_hook}"\n\n`;
+    }
+
+    // Add outline
+    if (item.generated_outline && item.generated_outline.length > 0) {
+      const outlineLabel = item.category === 'video_idea' ? 'Video Outline' :
+                          item.category === 'hook' ? 'Alternative Hooks' :
+                          item.category === 'script' ? 'Script Points' :
+                          item.category === 'thumbnail' ? 'Design Elements' :
+                          item.category === 'visual' ? 'Visual Techniques' :
+                          item.category === 'analytics' ? 'Insights' : 'Key Points';
+      content += `📝 ${outlineLabel}:\n`;
+      item.generated_outline.forEach((point, index) => {
+        content += `${index + 1}. ${point}\n`;
+      });
+      content += '\n';
+    }
+
+    // Add extracted text
+    if (item.extracted_text) {
+      content += `📄 Extracted Text:\n${item.extracted_text}\n\n`;
+    }
+
+    // Add user note
+    if (item.user_note) {
+      content += `💭 Notes:\n${item.user_note}\n\n`;
+    }
+
+    // Add platform recommendation
+    if (item.suggested_platform && item.suggested_platform !== 'other') {
+      content += `🎯 Recommended Platform: ${item.suggested_platform.charAt(0).toUpperCase() + item.suggested_platform.slice(1)}\n`;
+    }
+
+    // Add format
+    if (item.suggested_format) {
+      content += `📱 Format: ${item.suggested_format === 'short' ? 'Short Form' : 'Long Form'}\n`;
+    }
+
+    content += '\n---\nSaved with Stash\'d';
+
+    try {
+      await Share.share({
+        message: content,
+        title: item.generated_title || 'Stash\'d Content',
+      });
+    } catch (error) {
+      console.error('Share content error:', error);
     }
   }, [item]);
 
@@ -130,31 +231,59 @@ export default function ItemDetailScreen() {
     <>
       <Stack.Screen
         options={{
-          headerRight: () => (
-            <Pressable onPress={handleShare} hitSlop={8}>
-              <Ionicons name="share-outline" size={24} color={colors.textPrimary} />
-            </Pressable>
-          ),
+          headerShown: false,
         }}
       />
-      <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+      <StatusBar barStyle="light-content" />
+      <View style={styles.container}>
+        {/* Fixed header with back/share buttons */}
+        <View style={[styles.fixedHeader, { paddingTop: insets.top + spacing.sm }]}>
+          <Pressable
+            style={styles.overlayButton}
+            onPress={handleBack}
+            hitSlop={12}
+          >
+            <BlurView intensity={60} tint="dark" style={styles.blurButton}>
+              <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+            </BlurView>
+          </Pressable>
+
+          <Pressable
+            style={styles.overlayButton}
+            onPress={handleShare}
+            hitSlop={12}
+          >
+            <BlurView intensity={60} tint="dark" style={styles.blurButton}>
+              <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
+            </BlurView>
+          </Pressable>
+        </View>
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[styles.content, { paddingTop: insets.top + 60 }]}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Image */}
           <View style={styles.imageContainer}>
             <Image
               source={{ uri: item.image_url }}
               style={styles.image}
-              resizeMode="contain"
+              contentFit="contain"
+              transition={300}
             />
           </View>
 
           {/* Metadata */}
-          <View style={styles.metadata}>
+          <Animated.View
+            entering={FadeIn.duration(400)}
+            style={styles.metadata}
+          >
             <View style={styles.metaRow}>
-              <View style={[styles.badge, { backgroundColor: categoryInfo.color }]}>
-                <Ionicons name={categoryInfo.icon} size={14} color="#fff" />
-                <Text style={styles.badgeText}>{categoryInfo.label}</Text>
-              </View>
+              <Badge
+                category={item.category}
+                size="default"
+              />
               {item.source_platform && item.source_platform !== 'other' && (
                 <View style={styles.platformBadge}>
                   <Text style={styles.platformText}>
@@ -163,11 +292,11 @@ export default function ItemDetailScreen() {
                 </View>
               )}
               {item.suggested_format && (
-                <View style={[styles.platformBadge, styles.formatBadge]}>
+                <View style={styles.formatBadge}>
                   <Ionicons
                     name={item.suggested_format === 'short' ? 'time-outline' : 'film-outline'}
                     size={12}
-                    color={colors.amber500}
+                    color={colors.accent}
                   />
                   <Text style={styles.formatText}>
                     {item.suggested_format === 'short' ? 'Short Form' : 'Long Form'}
@@ -191,21 +320,27 @@ export default function ItemDetailScreen() {
                 minute: '2-digit',
               })}
             </Text>
-          </View>
+          </Animated.View>
 
           {/* Generated Title */}
           {item.generated_title && (
-            <View style={styles.section}>
+            <Animated.View
+              entering={FadeInDown.delay(100).duration(400)}
+              style={styles.section}
+            >
               <Text style={styles.sectionTitle}>Generated Title</Text>
               <View style={styles.titleBox}>
                 <Text style={styles.generatedTitle}>{item.generated_title}</Text>
               </View>
-            </View>
+            </Animated.View>
           )}
 
           {/* Generated Hook */}
           {item.generated_hook && (
-            <View style={styles.section}>
+            <Animated.View
+              entering={FadeInDown.delay(150).duration(400)}
+              style={styles.section}
+            >
               <Text style={styles.sectionTitle}>
                 {item.category === 'hook' ? 'Main Hook' :
                  item.category === 'thumbnail' ? 'Thumbnail Text' :
@@ -222,17 +357,20 @@ export default function ItemDetailScreen() {
                     'flash'
                   }
                   size={18}
-                  color={colors.amber500}
+                  color={colors.accent}
                   style={styles.hookIcon}
                 />
                 <Text style={styles.hookText}>{item.generated_hook}</Text>
               </View>
-            </View>
+            </Animated.View>
           )}
 
-          {/* Outline - label changes based on category */}
+          {/* Outline */}
           {item.generated_outline && item.generated_outline.length > 0 && (
-            <View style={styles.section}>
+            <Animated.View
+              entering={FadeInDown.delay(200).duration(400)}
+              style={styles.section}
+            >
               <Text style={styles.sectionTitle}>
                 {item.category === 'video_idea' ? 'Video Outline' :
                  item.category === 'hook' ? 'Alternative Hooks' :
@@ -247,10 +385,7 @@ export default function ItemDetailScreen() {
                   <View key={index} style={styles.outlineItem}>
                     <View style={[
                       styles.outlineNumber,
-                      item.category === 'hook' && styles.outlineNumberHook,
-                      item.category === 'thumbnail' && styles.outlineNumberThumbnail,
-                      item.category === 'visual' && styles.outlineNumberVisual,
-                      item.category === 'analytics' && styles.outlineNumberAnalytics,
+                      { backgroundColor: categoryInfo.color },
                     ]}>
                       {item.category === 'hook' ? (
                         <Ionicons name="flash" size={12} color="#fff" />
@@ -262,12 +397,15 @@ export default function ItemDetailScreen() {
                   </View>
                 ))}
               </View>
-            </View>
+            </Animated.View>
           )}
 
           {/* Suggested Platform */}
           {item.suggested_platform && item.suggested_platform !== 'other' && (
-            <View style={styles.section}>
+            <Animated.View
+              entering={FadeInDown.delay(250).duration(400)}
+              style={styles.section}
+            >
               <Text style={styles.sectionTitle}>Recommended Platform</Text>
               <View style={styles.platformRecommendation}>
                 <Ionicons
@@ -278,27 +416,33 @@ export default function ItemDetailScreen() {
                     'globe-outline'
                   }
                   size={24}
-                  color={colors.amber500}
+                  color={colors.accent}
                 />
                 <Text style={styles.platformRecommendationText}>
                   {item.suggested_platform.charAt(0).toUpperCase() + item.suggested_platform.slice(1)}
                 </Text>
               </View>
-            </View>
+            </Animated.View>
           )}
 
           {/* Extracted Text */}
           {item.extracted_text && (
-            <View style={styles.section}>
+            <Animated.View
+              entering={FadeInDown.delay(300).duration(400)}
+              style={styles.section}
+            >
               <Text style={styles.sectionTitle}>Extracted Text</Text>
               <View style={styles.textBox}>
                 <Text style={styles.extractedText}>{item.extracted_text}</Text>
               </View>
-            </View>
+            </Animated.View>
           )}
 
           {/* Category Selector */}
-          <View style={styles.section}>
+          <Animated.View
+            entering={FadeInDown.delay(350).duration(400)}
+            style={styles.section}
+          >
             <Text style={styles.sectionTitle}>Category</Text>
             <ScrollView
               horizontal
@@ -311,9 +455,12 @@ export default function ItemDetailScreen() {
                   style={[
                     styles.categoryChip,
                     selectedCategory === key && styles.categoryChipSelected,
-                    selectedCategory === key && { backgroundColor: cat.color + '20', borderColor: cat.color },
+                    selectedCategory === key && { backgroundColor: cat.background, borderColor: cat.color },
                   ]}
-                  onPress={() => setSelectedCategory(key)}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setSelectedCategory(key);
+                  }}
                 >
                   <Ionicons
                     name={cat.icon}
@@ -331,10 +478,13 @@ export default function ItemDetailScreen() {
                 </Pressable>
               ))}
             </ScrollView>
-          </View>
+          </Animated.View>
 
           {/* Notes */}
-          <View style={styles.section}>
+          <Animated.View
+            entering={FadeInDown.delay(400).duration(400)}
+            style={styles.section}
+          >
             <Text style={styles.sectionTitle}>Personal Notes</Text>
             <Input
               value={note}
@@ -343,15 +493,44 @@ export default function ItemDetailScreen() {
               multiline
               numberOfLines={4}
             />
-          </View>
+          </Animated.View>
+
+          {/* Share Content Button */}
+          {(item.generated_title || item.generated_hook || item.generated_outline?.length > 0 || item.extracted_text) && (
+            <Animated.View
+              entering={FadeInDown.delay(450).duration(400)}
+              style={styles.section}
+            >
+              <Text style={styles.sectionTitle}>Export</Text>
+              <Pressable
+                style={styles.shareContentButton}
+                onPress={handleShareContent}
+              >
+                <View style={styles.shareContentIcon}>
+                  <Ionicons name="document-text-outline" size={24} color={colors.accent} />
+                </View>
+                <View style={styles.shareContentInfo}>
+                  <Text style={styles.shareContentTitle}>Share as Text</Text>
+                  <Text style={styles.shareContentDesc}>
+                    Export all content to notes, messages, or other apps
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
+              </Pressable>
+            </Animated.View>
+          )}
 
           {/* Actions */}
-          <View style={styles.actions}>
+          <Animated.View
+            entering={FadeInDown.delay(500).duration(400)}
+            style={styles.actions}
+          >
             {hasChanges && (
               <Button
                 title="Save Changes"
                 onPress={handleSave}
                 loading={saving}
+                variant="primary"
                 style={styles.saveButton}
               />
             )}
@@ -359,11 +538,11 @@ export default function ItemDetailScreen() {
               title="Delete"
               variant="danger"
               onPress={handleDelete}
-              icon={<Ionicons name="trash-outline" size={18} color="#fff" />}
+              icon={<Ionicons name="trash-outline" size={18} color={colors.error} />}
             />
-          </View>
+          </Animated.View>
         </ScrollView>
-      </SafeAreaView>
+      </View>
     </>
   );
 }
@@ -389,6 +568,18 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: spacing.xxl,
   },
+  fixedHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.base,
+    paddingBottom: spacing.sm,
+    zIndex: 10,
+  },
   imageContainer: {
     width: width,
     height: width * 1.2,
@@ -398,29 +589,30 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  overlayButton: {
+    borderRadius: 22,
+    overflow: 'hidden',
+  },
+  blurButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+  },
   metadata: {
-    padding: spacing.md,
+    padding: spacing.base,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.borderSubtle,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     marginBottom: spacing.sm,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-    marginRight: spacing.sm,
-  },
-  badgeText: {
-    ...typography.caption,
-    color: '#fff',
-    fontWeight: '600',
-    marginLeft: 4,
   },
   platformBadge: {
     paddingHorizontal: spacing.sm,
@@ -435,15 +627,18 @@ const styles = StyleSheet.create({
   formatBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.amber500 + '20',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    backgroundColor: `${colors.accent}20`,
     borderWidth: 1,
-    borderColor: colors.amber500,
+    borderColor: colors.accent,
+    gap: 4,
   },
   formatText: {
     ...typography.caption,
-    color: colors.amber500,
+    color: colors.accent,
     fontWeight: '600',
-    marginLeft: 4,
   },
   confidence: {
     ...typography.caption,
@@ -455,21 +650,19 @@ const styles = StyleSheet.create({
     color: colors.textTertiary,
   },
   section: {
-    padding: spacing.md,
+    padding: spacing.base,
   },
   sectionTitle: {
-    ...typography.bodySmall,
+    ...typography.captionSmall,
     color: colors.textSecondary,
     marginBottom: spacing.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   textBox: {
     backgroundColor: colors.bgSecondary,
     borderRadius: borderRadius.md,
-    padding: spacing.md,
+    padding: spacing.base,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
   },
   extractedText: {
     ...typography.body,
@@ -478,11 +671,11 @@ const styles = StyleSheet.create({
   titleBox: {
     backgroundColor: colors.bgSecondary,
     borderRadius: borderRadius.md,
-    padding: spacing.md,
+    padding: spacing.base,
     borderWidth: 1,
-    borderColor: colors.amber500 + '40',
+    borderColor: `${colors.accent}40`,
     borderLeftWidth: 4,
-    borderLeftColor: colors.amber500,
+    borderLeftColor: colors.accent,
   },
   generatedTitle: {
     ...typography.h3,
@@ -490,9 +683,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   hookBox: {
-    backgroundColor: colors.amber500 + '10',
+    backgroundColor: `${colors.accent}15`,
     borderRadius: borderRadius.md,
-    padding: spacing.md,
+    padding: spacing.base,
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
@@ -509,9 +702,9 @@ const styles = StyleSheet.create({
   outlineBox: {
     backgroundColor: colors.bgSecondary,
     borderRadius: borderRadius.md,
-    padding: spacing.md,
+    padding: spacing.base,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
   },
   outlineItem: {
     flexDirection: 'row',
@@ -522,22 +715,9 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: colors.amber500,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm,
-  },
-  outlineNumberHook: {
-    backgroundColor: '#F59E0B',
-  },
-  outlineNumberThumbnail: {
-    backgroundColor: '#3b82f6',
-  },
-  outlineNumberVisual: {
-    backgroundColor: '#ec4899',
-  },
-  outlineNumberAnalytics: {
-    backgroundColor: '#06b6d4',
   },
   outlineNumberText: {
     ...typography.caption,
@@ -555,9 +735,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.bgSecondary,
     borderRadius: borderRadius.md,
-    padding: spacing.md,
+    padding: spacing.base,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
   },
   platformRecommendationText: {
     ...typography.body,
@@ -566,7 +746,8 @@ const styles = StyleSheet.create({
     marginLeft: spacing.sm,
   },
   categoryList: {
-    paddingRight: spacing.md,
+    paddingRight: spacing.base,
+    gap: spacing.sm,
   },
   categoryChip: {
     flexDirection: 'row',
@@ -576,8 +757,8 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     backgroundColor: colors.bgSecondary,
     borderWidth: 1,
-    borderColor: colors.border,
-    marginRight: spacing.sm,
+    borderColor: colors.borderSubtle,
+    gap: spacing.xs,
   },
   categoryChipSelected: {
     borderWidth: 2,
@@ -585,13 +766,43 @@ const styles = StyleSheet.create({
   categoryChipText: {
     ...typography.bodySmall,
     color: colors.textSecondary,
-    marginLeft: spacing.xs,
   },
   actions: {
-    padding: spacing.md,
+    padding: spacing.base,
     gap: spacing.sm,
   },
   saveButton: {
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  shareContentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.bgSecondary,
+    borderRadius: borderRadius.md,
+    padding: spacing.base,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  shareContentIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.md,
+    backgroundColor: `${colors.accent}20`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  shareContentInfo: {
+    flex: 1,
+  },
+  shareContentTitle: {
+    ...typography.body,
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
+  shareContentDesc: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
 });

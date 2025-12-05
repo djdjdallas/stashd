@@ -225,8 +225,8 @@ Return ONLY the JSON object, nothing else.`;
     const startTime = Date.now();
 
     const response = await anthropic.messages.create({
-      model: "claude-3-haiku-20240307",
-      max_tokens: 1000,
+      model: "claude-opus-4-5-20251101",
+      max_tokens: 2048,
       messages: [
         {
           role: "user",

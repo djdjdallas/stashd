@@ -1,42 +1,48 @@
 {
   "expo": {
-    "name": "Silo",
-    "slug": "silo",
+    "name": "Stashd",
+    "slug": "stashd",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "silo",
+    "icon": "./assets/images/Stylized S Backpack Logo.png",
+    "scheme": "stashd",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/Stylized S Backpack Logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0a0a0b"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.silo.app",
+      "bundleIdentifier": "com.stashd.app",
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "Silo needs access to your photos to import screenshots for organization.",
-        "NSPhotoLibraryAddUsageDescription": "Silo needs permission to save images to your photo library."
+        "NSPhotoLibraryUsageDescription": "Stashd needs access to your photos to import screenshots for organization.",
+        "NSPhotoLibraryAddUsageDescription": "Stashd needs permission to save images to your photo library.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#0a0a0b"
+        "foregroundImage": "./assets/images/Stylized S Backpack Logo.png",
+        "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.silo.app",
+      "package": "com.stashd.app",
       "permissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.READ_MEDIA_IMAGES"
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO"
       ]
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/Stylized S Backpack Logo.png"
     },
     "plugins": [
       "expo-router",
@@ -44,11 +50,31 @@
       [
         "expo-media-library",
         {
-          "photosPermission": "Silo needs access to your photos to import screenshots.",
-          "savePhotosPermission": "Allow Silo to save images.",
+          "photosPermission": "Stashd needs access to your photos to import screenshots.",
+          "savePhotosPermission": "Allow Stashd to save images.",
           "isAccessMediaLocationEnabled": true
         }
+      ],
+      [
+        "expo-share-intent",
+        {
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsImageWithMaxCount": 10,
+            "NSExtensionActivationSupportsWebURLWithMaxCount": 0
+          },
+          "androidIntentFilters": ["image/*"],
+          "androidMainActivityAttributes": {
+            "android:launchMode": "singleTask"
+          }
+        }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "25e4df0e-2496-4f89-bd71-893de102138c"
+      }
+    },
+    "owner": "djdallas"
   }
 }
